@@ -87,41 +87,9 @@ const getAccountNonce = async <
     client: Client<TTransport, TChain>,
     args: Prettify<GetAccountNonceParams>
 ): Promise<bigint> => {
-    const { sender, entryPoint, key = BigInt(0) } = args
-
-    // Instead of getting the nonce onchain, use the random nonce key
-    return getAction(
-        client,
-        readContract,
-        "readContract"
-    )({
-        address: entryPoint,
-        abi: [
-            {
-                inputs: [
-                    {
-                        name: "sender",
-                        type: "address"
-                    },
-                    {
-                        name: "key",
-                        type: "uint192"
-                    }
-                ],
-                name: "getNonce",
-                outputs: [
-                    {
-                        name: "nonce",
-                        type: "uint256"
-                    }
-                ],
-                stateMutability: "view",
-                type: "function"
-            }
-        ],
-        functionName: "getNonce",
-        args: [sender, key]
-    })
+    const nonceKey = BigInt(Date.now())
+    const nonce = (nonceKey << 64n) | (0n & 0xffffffffffffffffn)
+    return nonce
 }
 
 
