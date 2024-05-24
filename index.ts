@@ -31,7 +31,10 @@ const main = async () => {
         factoryAddress: "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
     })
 
-    const middleware = await createMiddleware(publicClient);
+    const middleware = await createMiddleware(
+        publicClient,
+        pimlicoBundlerClient
+    );
 
     const smartAccountClient = createSmartAccountClient({
         account: simpleAccount,

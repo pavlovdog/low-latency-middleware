@@ -1,16 +1,18 @@
 import { PublicClient } from "viem";
 import { createFeeRef } from "./utils/createFeeRef"
-import { UserOperation } from "permissionless";
-import { EntryPoint } from "permissionless/types";
+import { ENTRYPOINT_ADDRESS_V07, UserOperation, estimateUserOperationGas } from "permissionless";
+import { ENTRYPOINT_ADDRESS_V07_TYPE, EntryPoint } from "permissionless/types";
 import { createGasRef } from "./utils/createGasRef";
 import { calculatePerVerificationGas } from "./utils/preVerificationGas";
+import { getAction } from "viem/utils";
+import { PimlicoBundlerClient } from "permissionless/clients/pimlico";
 
 
-const CALL_GAS_LIMIT = 80_000n;
-const VERIFICATION_GAS_LIMIT = 350_000n;
 
-
-export const createMiddleware = async (publicClient: PublicClient) => {
+export const createMiddleware = async (
+    publicClient: PublicClient,
+    bundlerClient: PimlicoBundlerClient<ENTRYPOINT_ADDRESS_V07_TYPE>
+) => {
     const feeRef = await createFeeRef({
         refreshInterval: 1000,
         client: publicClient,
@@ -22,6 +24,9 @@ export const createMiddleware = async (publicClient: PublicClient) => {
     })
 
     const chainId = await publicClient.getChainId();
+
+    let callGasLimit = 0n;
+    let verificationGasLimit = 0n;
 
     return async (args: {
         userOperation: UserOperation<'v0.7'>,
@@ -36,15 +41,30 @@ export const createMiddleware = async (publicClient: PublicClient) => {
             gasRef
         );
 
-        // Get verificationGasLimit and callGasLimit
-        // TODO: pre-load initial values instead of hardcode
-        userOperation.callGasLimit = CALL_GAS_LIMIT;
-        userOperation.verificationGasLimit = VERIFICATION_GAS_LIMIT;
+        // Get verificationGasLimit and callGasLimit once
+        if (verificationGasLimit === 0n || callGasLimit === 0n) {
+            const gasParameters = await getAction(
+                bundlerClient,
+                estimateUserOperationGas<ENTRYPOINT_ADDRESS_V07_TYPE>,
+                "estimateUserOperationGas"
+            )(
+                {
+                    userOperation,
+                    entryPoint: ENTRYPOINT_ADDRESS_V07
+                },
+            )
+    
+            verificationGasLimit = gasParameters.verificationGasLimit;
+            callGasLimit = gasParameters.callGasLimit;
+        }
+
+        userOperation.callGasLimit = callGasLimit;
+        userOperation.verificationGasLimit = verificationGasLimit;
 
         userOperation.maxFeePerGas = feeRef.fees.maxFeePerGas;
         userOperation.maxPriorityFeePerGas = feeRef.fees.maxPriorityFeePerGas;
 
-        // TODO: integrate paymaster
+        // TODO: integrate paymaster if necessary
         userOperation.paymasterVerificationGasLimit = 0n;
         userOperation.paymasterPostOpGasLimit = 0n;
 
